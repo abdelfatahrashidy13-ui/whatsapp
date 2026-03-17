@@ -1,0 +1,128 @@
+import pytest
+from unittest.mock import MagicMock, patch
+from src.whatsapp_beacon.beacon import WhatsAppBeacon
+from src.whatsapp_beacon.config import Config
+
+@pytest.fixture
+def mock_driver():
+    with patch('src.whatsapp_beacon.beacon.webdriver.Chrome') as mock:
+        yield mock
+
+@pytest.fixture
+def mock_resolve_chromedriver():
+    with patch.object(WhatsAppBeacon, '_resolve_chromedriver_path', return_value="/path/to/driver"):
+        yield
+
+@pytest.fixture
+def config():
+    c = Config("nonexistent.yaml")
+    c.config['username'] = "Test User"
+    c.config['headless'] = True
+    c.config['data_dir'] = "/tmp/data" # Should be mocked usually
+    return c
+
+def test_beacon_init(config):
+    beacon = WhatsAppBeacon(config)
+    assert beacon.driver is None
+    assert beacon.config.username == "Test User"
+
+def test_setup_driver(config, mock_driver, mock_resolve_chromedriver):
+    beacon = WhatsAppBeacon(config)
+    beacon.setup_driver()
+
+    mock_driver.assert_called_once()
+    # Check if headless options were added
+    args, kwargs = mock_driver.call_args
+    options = kwargs['options']
+    # We can't easily inspect C++ objects (ChromeOptions) deeply in mocks easily without more work,
+    # but we verify the call happened.
+
+def test_whatsapp_login_headless(config, mock_driver, mock_resolve_chromedriver):
+    beacon = WhatsAppBeacon(config)
+    beacon.setup_driver()
+
+    # Mock driver instance
+    driver_instance = mock_driver.return_value
+    beacon.driver = driver_instance
+
+    # Simulate Login Success
+    # We need to mock WebDriverWait to return True immediately
+    with patch('src.whatsapp_beacon.beacon.WebDriverWait') as mock_wait:
+         # Mocking the presence_of_element_located check
+         mock_wait.return_value.until.return_value = True
+
+         beacon.whatsapp_login()
+
+         driver_instance.get.assert_called_with('https://web.whatsapp.com')
+
+def test_check_online_status_true(config, mock_driver):
+    beacon = WhatsAppBeacon(config)
+    beacon.driver = MagicMock()
+
+    # If find_element succeeds, it returns true
+    beacon.driver.find_element.return_value = "Element"
+
+    assert beacon.check_online_status("//xpath") is True
+
+def test_check_online_status_false(config, mock_driver):
+    from selenium.common.exceptions import NoSuchElementException
+    beacon = WhatsAppBeacon(config)
+    beacon.driver = MagicMock()
+
+    beacon.driver.find_element.side_effect = NoSuchElementException("msg")
+
+    assert beacon.check_online_status("//xpath") is False
+
+def test_resolve_chromedriver_explicit_path(config, tmp_path):
+    """Config chrome_driver_path takes priority when the file exists."""
+    fake_driver = tmp_path / "chromedriver"
+    fake_driver.touch()
+    config.config['chrome_driver_path'] = str(fake_driver)
+    beacon = WhatsAppBeacon(config)
+    assert beacon._resolve_chromedriver_path() == str(fake_driver)
+
+def test_resolve_chromedriver_falls_back_to_system(config):
+    """Falls back to system chromedriver on PATH when no config path is set."""
+    with patch('src.whatsapp_beacon.beacon.shutil.which', return_value="/usr/bin/chromedriver"):
+        beacon = WhatsAppBeacon(config)
+        assert beacon._resolve_chromedriver_path() == "/usr/bin/chromedriver"
+
+
+def test_resolve_chromedriver_defers_to_selenium_manager(config):
+    """Uses Selenium Manager when there is no configured or system chromedriver."""
+    with patch('src.whatsapp_beacon.beacon.shutil.which', return_value=None):
+        beacon = WhatsAppBeacon(config)
+        assert beacon._resolve_chromedriver_path() is None
+
+
+def test_resolve_chrome_binary_explicit_path(config, tmp_path):
+    """Config chrome_binary_path takes priority when the file exists."""
+    fake_binary = tmp_path / "google-chrome"
+    fake_binary.touch()
+    fake_binary.chmod(0o755)
+    config.config['chrome_binary_path'] = str(fake_binary)
+    beacon = WhatsAppBeacon(config)
+    assert beacon._resolve_chrome_binary_path() == str(fake_binary)
+
+
+def test_resolve_chrome_binary_falls_back_to_chromium(config):
+    """Falls back to a Chromium binary when Google Chrome is not present."""
+    def fake_which(command):
+        mapping = {
+            'chromium': '/usr/bin/chromium',
+        }
+        return mapping.get(command)
+
+    with patch('src.whatsapp_beacon.beacon.shutil.which', side_effect=fake_which):
+        beacon = WhatsAppBeacon(config)
+        assert beacon._resolve_chrome_binary_path() == '/usr/bin/chromium'
+
+
+def test_setup_driver_uses_resolved_chrome_binary(config, mock_driver, mock_resolve_chromedriver):
+    beacon = WhatsAppBeacon(config)
+
+    with patch.object(WhatsAppBeacon, '_resolve_chrome_binary_path', return_value='/usr/bin/chromium'):
+        beacon.setup_driver()
+
+    options = mock_driver.call_args.kwargs['options']
+    assert options.binary_location == '/usr/bin/chromium'
