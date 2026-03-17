@@ -1,9 +1,28 @@
-username: ""
-language: "en"
-excel: false
-headless: false
-split_char: "-"
-browser: "chrome"  # Options: chrome, firefox, edge
-log_level: "INFO"
-data_dir: "data"
-chrome_binary_path: null
+from whatsapp_api import WhatsApp  # تأكد من تثبيت المكتبة اللي بتستخدمها في requirements
+
+# إعدادات البوت باسمك يا نجم
+BOT_NAME = "SAIED RASHIDY BOT 🚀"
+OWNER_NAME = "SAIED RASHIDY"
+
+def start_bot():
+    print(f"--- {BOT_NAME} IS STARTING ---")
+    # هنا بنربط برقمك اللي حطيته في الـ config.yaml
+    client = WhatsApp()
+    
+    @client.on_message
+    def handle_message(message):
+        sender = message.sender
+        text = message.text.lower()
+
+        # الرد التلقائي اللي هيعرف الناس بمين صاحب الليلة
+        if "hello" in text or "سلام" in text:
+            reply = f"أهلاً بك! معك البوت الرسمي للمحرر {OWNER_NAME} 😎\nكيف يمكنني مساعدتك اليوم؟"
+            client.send_message(sender, reply)
+            
+        elif "شغل" in text:
+            client.send_message(sender, "جاري تجهيز طلبك في ورشة SAIED RASHIDY-EDITOR 🎬")
+
+    client.run()
+
+if __name__ == "__main__":
+    start_bot()
