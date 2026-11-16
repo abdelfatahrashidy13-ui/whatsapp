@@ -1,4 +1,4 @@
-# 🕵️‍♂️ WhatsApp Beacon (OSINT Tracker)  
+# 🕵️‍♂️ WhatsApp Beacon (OSINT Tracker)
 
 [![PyPI](https://img.shields.io/pypi/v/whatsapp-osint?style=for-the-badge&logo=pypi&logoColor=white)](https://pypi.org/project/whatsapp-osint/)
 ![License](https://img.shields.io/badge/license-MIT-blue.svg?style=for-the-badge)
